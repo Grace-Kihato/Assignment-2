@@ -1,0 +1,170 @@
+---
+title: An analysis of out of school rate for children one year younger than the official
+  entry age across the world
+author: "Wanjiku Kihato"
+date: "2023-04-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, include=FALSE}
+library(tidyverse)
+library(dplyr)
+```
+
+# Introduction
+
+Education is an important aspect of the growth of any nation, hence children who are not in school pose a risk to the growth and development of a nation. This document explores the out of school rate for children one year younger than official entry age as gathered by UNICEF which refers to the total number of children who are one year younger than the official age of primary education and who are not enrolled in pre-primary or primary education.
+
+We begin by cleaning the data then proceed to answering key questions through the use of a
+<ol>
+<li>Bar graph</li>
+<li>Scatter plot</li>
+<li>Time series chart</li>
+<li>World map</li>
+</ol>
+
+
+
+## Reading the csv file and checking the structure of the datatset
+
+#### Reading the file
+
+```{r}
+unicef.dataset <- read.csv("C:/Users/Jenom/OneDrive/Documents/Novus/Assignments/BDA/unicef_indicator_1.csv")
+```
+
+#### Checking the structure of the dataset
+
+```{r}
+summary(unicef.dataset)
+str(unicef.dataset)
+```
+
+# Data Cleaning
+
+#### Removing empty columns
+
+On exploration of the dataset, we observed that about 5 columns had NA values, so removing them was the best course of action
+
+```{r}
+clean.unicef <- select(unicef.dataset, -9:-14)
+```
+
+#### Keeping only the 'Male' and 'Female' value in the sex column
+
+The sex column contained three distinct values, namely 1. Male 2. Female 3. Total For the first few graphs we only needed to display the distribution between male and female, so we created a subset of the dataset that only contained those fields
+
+```{r}
+valid_sex <- c('Male', 'Female') 
+clean.unicef <- clean.unicef %>% 
+  filter(sex %in% valid_sex)
+```
+
+# Exploratory Data Analysis
+
+## 1. Total observed values per year
+We begin by taking a birds eye view to understand this trend on a global scale.
+
+
+```{r, out.width="100%"}
+total_obs_val_per_year <- clean.unicef %>% 
+  select(time_period, sex, obs_value) %>% 
+  group_by(time_period, sex) %>% 
+  summarise(obs_value = sum(obs_value)) %>%
+  arrange(desc(time_period))
+
+ggplot(data = total_obs_val_per_year, aes(x=time_period, y=obs_value)) + geom_line(aes(colour=sex)) + labs(title ="Total observed values per year", x = "Year", y = "Observed values")
+```
+
+From this graph we noticed a rise from 2014 to 2020, after which we saw a significant drop in the numbers from 2020 to 2022. This could be as a result of a number of things, notably due to the impact of COVID-19 on children's education awareness. 
+
+## 2. The ratio of Male to Female in top 15 countries with highest observed values
+After understanding the trend over the years, we proceeded to take a deep dive into the top 15 countries with the highest observed values to see if there is a pattern, common characteristics in which they share, amongst other things.
+
+```{r, out.width="100%"}
+highest_male_to_female <- clean.unicef %>% select(country, sex, obs_value) %>% arrange(desc(obs_value)) %>% head(30)
+
+highest_male_to_female <- highest_male_to_female %>% arrange(country, obs_value)
+
+ggplot(highest_male_to_female, aes(country, obs_value, fill = factor(sex))) + labs(title ="The ratio of Male to female in top 15 countries with highest observed values", x = "Country", y = "Observed values") + theme(plot.title = element_text(hjust = 0.5)) + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + geom_col()
+```
+
+For the highest observed values we noticed a lot of the concentration of the countries (12 out of the 15) laid in Sub-Saharan Africa, while one (Panama) laid in Central America and two (Tajikistan and Myanmar) in Asia. An interesting observation was noted, i.e. although the concentration of the highest observed values laid in Africa, Panama, Tajikistan and Myanmar had the higher observed values than any of the African countries. 
+
+## 3. The total observed values across the world
+Understanding how these figures are distributed across the world can help provide insights into assisting with providing solutions on a country level, continent level or on a global scale.
+
+##### First we have to load in the world map
+
+```{r}
+world_map <- map_data("world")
+```
+
+We want to plot the total number so we have to subbset the original dataset to keep only the total in the sex column
+
+```{r}
+unicef_for_map <- unicef.dataset
+total_sex <- c('Total')
+unicef_for_map <- unicef_for_map %>% filter(sex %in% total_sex)
+```
+
+##### Removing empty columns
+
+```{r}
+unicef_for_map <- select(unicef_for_map, -9:-14)
+```
+
+Then we have to rename the country column of our dataset to "region", so as to allow us perform a group by when joining both datasets
+
+```{r}
+colnames(unicef_for_map)[colnames(unicef_for_map) == 'country'] <- 'region'
+```
+
+##### Only keeping region and obs_val colum
+
+```{r}
+unicef_for_map = subset(unicef_for_map, select = c('region', 'obs_value'))
+```
+
+Then we join both datasets on the region column
+
+```{r}
+world_map = left_join(world_map, unicef_for_map, by="region")
+```
+
+Joining them lead to most rows in the obs_value columns having NA values so we created a new dataframe to keep only the rows with values in the obs_value column
+
+```{r}
+world_map_for_plotting <- world_map %>% filter(!is.na(world_map$obs_value))
+```
+
+##### Plotting the map
+
+```{r, out.width="100%"}
+map1 <- ggplot(world_map_for_plotting, aes(x = long, y = lat, group = group)) +
+  geom_polygon(aes(fill = obs_value), color = "black")
+
+map2 <- map1 + scale_fill_gradient(name = "Percentage of observed values", low = "palegreen", high = "red", na.value = "grey-50") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        rect = element_blank())
+map2
+```
+The map shows the total observed values across the world and shows regions it is lowest in in green and highest in red. We notice that certain regions had high observed values while most regions had low observed values, which means if a solution was to be proffered, it might be on a regional level. 
+
+## 4. Scatter plot with Regression line
+
+```{r, out.width="100%"}
+ggplot(data = clean.unicef, aes(x = time_period, y = obs_value)) + 
+  geom_point(color='black') +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(title ="Scatter plot of observed values by years with regression line") 
+```
+From the regression line, we notice a steady decrease in the numbers wghich signifies an improvement in the observed values over the years
